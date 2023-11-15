@@ -37,7 +37,13 @@ tasks:
     deps:
       - build_image
     cmds:
-      - "{{.qemu_binary}} -machine {{.mach}} -cpu {{.cpu}} -smp {{.cpus}} -m {{.mem}} -nographic -serial mon:stdio -bios none -kernel {{.kernel_out}}"
+      - "{{.qemu_binary}} -machine {{.mach}} -cpu {{.cpu}} -smp {{.cpus}} -m {{.mem}} -nographic -serial mon:stdio -bios none -kernel {{.kernel_out}} -drive if=none,format=raw,file=hdd.img,id=foo -device virtio-blk-device,drive=foo,bus=virtio-mmio-bus.0"
+
+  qemu-debug:
+    deps:
+      - build_image
+    cmds:
+      - "{{.qemu_binary}} -machine {{.mach}} -cpu {{.cpu}} -smp {{.cpus}} -m {{.mem}} -nographic -serial mon:stdio -bios none -kernel {{.kernel_out}} -drive if=none,format=raw,file=hdd.img,id=foo -device virtio-blk-device,drive=foo,bus=virtio-mmio-bus.0 -s -S"
 
   readelf:
     deps:

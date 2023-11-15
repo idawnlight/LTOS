@@ -56,6 +56,11 @@ _start:
 	# Machine's trap vector base address is set to `asm_trap_vector`.
 	la		t2, asm_trap_vector
 	csrw	mtvec, t2
+
+	li   t5, 0x2004000
+    li   t4, 2000000
+    sw   t4, 0(t5)
+
 	# Setting Machine's interrupt-enable bits (`mie` register):
 	# 1 << 3 : Machine's M-mode software interrupt-enable bit is 1 (MSIE=1).
 	# 1 << 7 : Machine's timer interrupt-enable bit is 1 (MTIE=1).
