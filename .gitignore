@@ -1,0 +1,7 @@
+**/target
+
+.idea/
+
+hdd.img
+kernel.d
+kernel.elf

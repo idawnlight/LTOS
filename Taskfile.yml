@@ -1,0 +1,51 @@
+version: '3'
+
+vars:
+  type: debug
+  release_flag: ""
+  k: kernel/src
+  target: riscv64gc-unknown-none-elf
+  riscvcc: riscv64-elf-gcc
+  cflags: "-Wall -Wextra -pedantic -static -ffreestanding -nostdlib -fno-exceptions -march=rv64gc -mabi=lp64d -Wall -Werror -O -fno-omit-frame-pointer -ggdb -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie"
+  target_path: ./target/{{.target}}/{{.type}}
+  assembly_files:
+    sh: ls {{.k}}/asm/*.S | tr '\n' ' '
+  kernel_libs: "{{.target_path}}"
+  kernel_lib: "-lkernel -lgcc"
+  kernel_linker_script: "{{.k}}/kernel.lds"
+  kernel_lib_out: "{{.kernel_libs}}/libkernel.a"
+  kernel_out: kernel.elf
+  qemu_binary: qemu-system-riscv64
+  mach: virt
+  cpu: rv64
+  cpus: 4
+  mem: 128M
+  read_elf: /opt/homebrew/opt/binutils/bin/readelf
+
+tasks:
+  build:
+    cmds:
+      - cargo build {{.release_flag}}
+
+  build_image:
+    deps:
+      - build
+    cmds:
+      - "{{.riscvcc}} {{.cflags}} -T{{.kernel_linker_script}} -o {{.kernel_out}} {{.assembly_files}} {{.cxx_files}} -L{{.kernel_libs}} {{.kernel_lib}}"
+
+  qemu:
+    deps:
+      - build_image
+    cmds:
+      - "{{.qemu_binary}} -machine {{.mach}} -cpu {{.cpu}} -smp {{.cpus}} -m {{.mem}} -nographic -serial mon:stdio -bios none -kernel {{.kernel_out}}"
+
+  readelf:
+    deps:
+      - build_image
+    cmds:
+      - "{{.read_elf}} -a {{.kernel_out}}"
+
+  clean:
+    cmds:
+      - cargo clean
+      - rm -f {{.kernel_out}}
