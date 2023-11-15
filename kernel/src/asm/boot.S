@@ -57,15 +57,18 @@ _start:
 	la		t2, asm_trap_vector
 	csrw	mtvec, t2
 
-	li   t5, 0x2004000
-    li   t4, 2000000
-    sw   t4, 0(t5)
+	# li   t5, 0x2004000
+    # li   t4, 2000000
+    # sw   t4, 0(t5)
 
 	# Setting Machine's interrupt-enable bits (`mie` register):
 	# 1 << 3 : Machine's M-mode software interrupt-enable bit is 1 (MSIE=1).
 	# 1 << 7 : Machine's timer interrupt-enable bit is 1 (MTIE=1).
+	# disable timer interrupt for now,
+	# until we have a really working timer interrupt handler
+	# https://dingfen.github.io/risc-v/2020/08/17/riscv-from-scratch-6.html
 	# 1 << 11: Machine's external interrupt-enable bit is 1 (MEIE=1).
-	li		t3, (1 << 3) | (1 << 7) | (1 << 11)
+	li		t3, (1 << 3) | (0 << 7) | (1 << 11)
 	csrw	mie, t3
 	# Set the return address to infinitely wait for interrupts.
 	la		ra, 4f
