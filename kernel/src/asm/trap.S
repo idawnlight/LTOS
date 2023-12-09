@@ -1,17 +1,20 @@
 # trap.S
-# Assembly-level trap handler.
+# In the future our trap vector will go here.
 
 .global asm_trap_vector
+# This will be our trap vector when we start
+# handling interrupts.
 asm_trap_vector:
-	# We get here when the CPU is interrupted
-	# for any reason.
+	csrr	a0, mtval
+	wfi
+	j asm_trap_vector
 
-	# handle timer interrupt
-	# add mtimecmp
-	# la   a1, 0x2004000
-	# ld   a2, 0(a1)
-	# li   a3, 2000000
-	# add  a2, a2, a3
-	# sd   a2, 0(a1)
 
-	mret
+.global asm_trap_vector_2
+# This will be our trap vector when we start
+# handling interrupts.
+asm_trap_vector_2:
+	csrr	a0, mtval
+	wfi
+	j asm_trap_vector_2
+
