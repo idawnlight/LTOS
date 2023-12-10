@@ -11,7 +11,7 @@ use core::{mem::size_of, ptr::null_mut};
 use core::alloc::{GlobalAlloc, Layout};
 
 use crate::page::{align_val, PAGE_SIZE, Table, zalloc};
-use crate::println;
+use crate::{print, println};
 
 #[repr(usize)]
 enum AllocListFlags {
