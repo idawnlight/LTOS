@@ -89,8 +89,8 @@ _start:
     la       ra, 4f
 
 # Set up the PMP registers correctly
-# https: //www.reddit.com/r/osdev/comments/moaz1x/switching_to_supervisor_mode_in_riscv/
-# https: //github.com/AshTS/Qor, 01095475110e0be131426620a5b395a7ccec75ef
+# https://www.reddit.com/r/osdev/comments/moaz1x/switching_to_supervisor_mode_in_riscv/
+# https://github.com/AshTS/Qor, 01095475110e0be131426620a5b395a7ccec75ef
     li       t4, 31
     csrw     pmpcfg0, t4
     li       t5, (1 << 55) - 1
@@ -141,5 +141,3 @@ _start:
 4:
     wfi
     j        4b
-
-

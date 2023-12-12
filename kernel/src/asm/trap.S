@@ -48,7 +48,7 @@ m_trap_vector:
 # bottom register (x31)
     .set      i, 1
     .rept     30
-    save_gp   %i
+        save_gp   %i
     .set      i, i+1
     .endr
 
@@ -85,7 +85,7 @@ m_trap_vector:
 # Restore all GP registers
     .set      i, 1
     .rept     31
-    load_gp   %i
+        load_gp   %i
     .set      i, i+1
     .endr
 

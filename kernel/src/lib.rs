@@ -137,6 +137,7 @@ extern "C" fn kinit() {
     // as soon as possible.
     // Interrupts are disabled for the duration of kinit()
     uart::Uart::new(0x1000_0000).init();
+    println!("=== Now in kinit() ===");
     page::init();
     kmem::init();
 
@@ -146,8 +147,6 @@ extern "C" fn kinit() {
     let mut root = unsafe { root_ptr.as_mut().unwrap() };
     let kheap_head = kmem::get_head() as usize;
     let total_pages = kmem::get_num_allocations();
-    println!();
-    println!();
     unsafe {
         println!("TEXT:   0x{:x} -> 0x{:x}", TEXT_START, TEXT_END);
         println!("RODATA: 0x{:x} -> 0x{:x}", RODATA_START, RODATA_END);
@@ -308,6 +307,7 @@ extern "C" fn kinit() {
         let p = cpu::KERNEL_TRAP_FRAME[0].trap_stack as usize - 1;
         let m = page::virt_to_phys(&root, p).unwrap_or(0);
         println!("Walk 0x{:x} = 0x{:x}", p, m);
+        println!("KERNEL_TRAP_FRAME[0] = 0x{:x}", &mut cpu::KERNEL_TRAP_FRAME[0] as *mut cpu::TrapFrame as usize);
     }
     // The following shows how we're going to walk to translate a virtual
     // address into a physical address. We will use this whenever a user
@@ -316,6 +316,7 @@ extern "C" fn kinit() {
     // the scenes.
     println!("Setting 0x{:x}", satp_value);
     println!("Scratch reg = 0x{:x}", cpu::mscratch_read());
+    println!();
     cpu::satp_write(satp_value);
     cpu::satp_fence_asid(0);
 }
@@ -345,6 +346,7 @@ extern "C" fn kinit_hart(hartid: usize) {
 
 #[no_mangle]
 extern "C" fn kmain() {
+    println!("=== Now in kmain() ===");
     // kmain() starts in supervisor mode. So, we should have the trap
     // vector setup and the MMU turned on when we get here.
 
@@ -370,11 +372,13 @@ extern "C" fn kmain() {
 
     unsafe {
         // Set the next machine timer to fire.
+        // Shouldn't really work here, it's copied from m_trap
         let mtimecmp = 0x0200_4000 as *mut u64;
         let mtime = 0x0200_bff8 as *const u64;
         // The frequency given by QEMU is 10_000_000 Hz, so this sets
         // the next interrupt to fire one second from now.
-        mtimecmp.write_volatile(mtime.read_volatile() + 10_000_000);
+        println!("mtime = 0x{:x}", mtime.read_volatile());
+        // mtimecmp.write_volatile(mtime.read_volatile() + 10_000_000);
 
         // Let's cause a page fault and see what happens. This should trap
         // to m_trap under trap.rs
@@ -383,6 +387,8 @@ extern "C" fn kmain() {
     }
     // If we get here, the Box, vec, and String should all be freed since
     // they go out of scope. This calls their "Drop" trait.
+    println!("Interrupts are handled");
+    println!();
 
     // Let's set up the interrupt system via the PLIC. We have to set the threshold to something
     // that won't mask all interrupts.
