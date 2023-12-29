@@ -211,3 +211,21 @@ pub fn satp_fence_asid(asid: usize) {
         asm!("sfence.vma zero, {0}", in(reg) asid);
     }
 }
+
+// Physical Memory Protection
+pub fn pmpcfg0_write(val: usize) {
+    unsafe {
+        asm!(
+        "csrw pmpcfg0, {0}",
+        in(reg) val,
+        );
+    }
+}
+pub fn pmpaddr0_write(val: usize) {
+    unsafe {
+        asm!(
+        "csrw pmpaddr0, {0}",
+        in(reg) val,
+        );
+    }
+}
