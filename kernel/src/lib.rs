@@ -17,8 +17,6 @@ pub mod page;
 pub mod trap;
 pub mod cpu;
 pub mod plic;
-pub mod virtio;
-pub mod block;
 pub mod syscall;
 pub mod clint;
 pub mod intr;
@@ -30,6 +28,8 @@ pub mod symbols;
 
 pub mod print;
 pub mod mem;
+pub mod virtio;
+pub mod block;
 
 // ///////////////////////////////////
 // / LANGUAGE STRUCTURES / FUNCTIONS

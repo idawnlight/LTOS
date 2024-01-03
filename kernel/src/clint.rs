@@ -28,10 +28,9 @@ pub unsafe fn timer_init() {
     let scratch = &mut MSCRATCH0[id];
 
     // space for timer trap to save information.
+    scratch[3] = mtimecmp as u64;
+    scratch[4] = interval;
     mscratch::write(scratch.as_mut_ptr() as usize);
-    scratch[3] = mtime as u64;
-    scratch[4] = mtimecmp as u64;
-    scratch[5] = interval;
 
     // set machine-mode trap handler as timervec in kernelvec.S
     mtvec::write(timervec as usize, mtvec::TrapMode::Direct);

@@ -1,6 +1,6 @@
 use core::arch::asm;
 use riscv::register::*;
-use crate::{clint, cpu, info, mem, print, println, uart};
+use crate::{arch, clint, cpu, info, mem, plic, print, println, trap, uart, virtio};
 use crate::arch::hart_id;
 
 #[no_mangle]
@@ -51,16 +51,16 @@ extern "C" fn kmain() {
         info!("  kernel page table... \x1b[0;32minitialized\x1b[0m");
         // unsafe { virtio::init(); }
         // info!("  virt-io... \x1b[0;32minitialized\x1b[0m");
-        // unsafe { plic::init(); }
-        // info!("  PLIC... \x1b[0;32minitialized\x1b[0m");
-        // mem::hartinit();
-        // info!("kernel page table configured");
-        // info!("  Trap... \x1b[0;32minitialized\x1b[0m");
-        // info!("  Timer... \x1b[0;32minitialized\x1b[0m");
-        // plic::hartinit();
-        // info!("  PLIC... \x1b[0;32minitialized\x1b[0m");
-        // unsafe { trap::hartinit(); }
-        // info!("  Interrupt... \x1b[0;32minitialized\x1b[0m");
+        unsafe { plic::init(); }
+        info!("  PLIC... \x1b[0;32minitialized\x1b[0m");
+        mem::hartinit();
+        info!("kernel page table configured");
+        info!("  Trap... \x1b[0;32minitialized\x1b[0m");
+        info!("  Timer... \x1b[0;32minitialized\x1b[0m");
+        plic::hartinit();
+        info!("  PLIC... \x1b[0;32minitialized\x1b[0m");
+        unsafe { trap::hartinit(); }
+        info!("  Interrupt... \x1b[0;32minitialized\x1b[0m");
         // unsafe { process::init(); }
         // process::init_proc();
         unsafe {
@@ -74,9 +74,9 @@ extern "C" fn kmain() {
             }
         }
         info!("hart {} booting", hart_id());
-        // mem::hartinit();
-        // unsafe { trap::hartinit(); }
-        // plic::hartinit();
+        mem::hartinit();
+        unsafe { trap::hartinit(); }
+        plic::hartinit();
     }
 
     cpu::wait_forever();

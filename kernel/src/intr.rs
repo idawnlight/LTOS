@@ -6,7 +6,8 @@
 //! Handle interrupts
 
 use riscv::register::*;
-use crate::{cpu, plic};
+use crate::{cpu, plic, println};
+use crate::uart::uartintr;
 // use crate::uart::uartintr;
 // use crate::arch;
 // use crate::virtio::virtiointr;
@@ -23,21 +24,21 @@ pub fn devintr() -> Option<Intr> {
     let cause = scause::read();
 
     if cause.is_interrupt() && cause.code() == 9 {
-        // let plic = crate::plic::PLIC();
-        // if let Some(interrupt) = plic.next() {
-        //     match interrupt {
-        //         plic::UART0_IRQ => {
-        //             uartintr();
-        //         },
-        //         plic::VIRTIO0_IRQ => {
-        //             virtiointr();
-        //         },
-        //         _ => {
-        //             println!("Unrecognized external interrupt: {}", interrupt);
-        //         }
-        //     }
-        //     plic.complete(interrupt);
-        // }
+        let plic = crate::plic::PLIC();
+        if let Some(interrupt) = plic.next() {
+            match interrupt {
+                plic::UART0_IRQ => {
+                    uartintr();
+                },
+                // plic::VIRTIO0_IRQ => {
+                //     virtiointr();
+                // },
+                _ => {
+                    println!("Unrecognized external interrupt: {}", interrupt);
+                }
+            }
+            plic.complete(interrupt);
+        }
         Some(Intr::Device)
     } else if cause.is_interrupt() && cause.code() == 1 {
         cpu::sip_write(cpu::sip_read() & !2);
