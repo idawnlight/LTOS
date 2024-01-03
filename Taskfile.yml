@@ -20,11 +20,11 @@ vars:
   kernel_out: kernel.elf
   user_libs: "{{.target_path}}"
   user_lib_out: "{{.user_libs}}/libuser.rlib"
-  user_linker_script: "{{.u}}/user.ld"
+  user_linker_script: "{{.u}}/user.lds"
   qemu_binary: qemu-system-riscv64
   mach: virt
   cpu: rv64
-  cpus: 1
+  cpus: 4
   mem: 128M
   read_elf: /opt/homebrew/opt/binutils/bin/readelf
 

@@ -15,11 +15,14 @@ pub unsafe extern "C" fn _start() -> ! {
     open("/console", 0);
     dup(0);
     dup(0);
-    println!("ready to fork!");
+    println!("Hello world from user mode, through /console and open/dup");
     let p = fork();
     if p == 0 {
-        println!("calling test1...");
+        println!("forked: parent");
         // exec("/test1", &["test1", "test2"]);
+    } else {
+        println!("forked: child");
+        // exec("/test2", &["test2", "test1"]);
     }
     loop {}
 }
