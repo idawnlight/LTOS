@@ -6,6 +6,7 @@
 
 use core::arch::asm;
 use core::ptr::null_mut;
+use riscv::register::sstatus;
 
 #[repr(usize)]
 pub enum SatpMode {
@@ -74,6 +75,26 @@ pub fn mstatus_read() -> usize {
         );
     }
     rval
+}
+
+pub fn sstatus_read() -> usize {
+    let rval: usize;
+    unsafe {
+        asm!(
+        "csrr {0}, sstatus",
+        out(reg) rval,
+        );
+    }
+    rval
+}
+
+pub fn sstatus_write(val: usize) {
+    unsafe {
+        asm!(
+        "csrw sstatus, {0}",
+        in(reg) val,
+        );
+    }
 }
 
 pub fn stvec_write(val: usize) {
@@ -227,5 +248,49 @@ pub fn pmpaddr0_write(val: usize) {
         "csrw pmpaddr0, {0}",
         in(reg) val,
         );
+    }
+}
+
+pub fn hart_id() -> usize {
+    let rval: usize;
+    unsafe {
+        asm!(
+        "csrr {0}, tp",
+        out(reg) rval,
+        );
+    }
+    rval
+}
+
+pub fn sip_write(val: usize) {
+    unsafe {
+        asm!(
+        "csrw sip, {0}",
+        in(reg) val,
+        );
+    }
+}
+
+pub fn sip_read() -> usize {
+    let rval: usize;
+    unsafe {
+        asm!(
+        "csrr {0}, sip",
+        out(reg) rval,
+        );
+    }
+    rval
+}
+
+/// Check if interrupt is enabled
+pub fn intr_get() -> bool {
+    sstatus::read().sie()
+}
+
+pub fn wait_forever() -> ! {
+    loop {
+        unsafe {
+            riscv::asm::wfi();
+        }
     }
 }

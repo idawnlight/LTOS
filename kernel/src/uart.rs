@@ -1,11 +1,22 @@
-// uart.rs
-// UART routines and driver
+// Copyright (c) 2020 Alex Chi
+//
+// This software is released under the MIT License.
+// https://opensource.org/licenses/MIT
+
+//! UART driver module
 
 use core::convert::TryInto;
-use core::fmt::Error;
 use core::fmt::Write;
+use core::fmt::Error;
+use crate::spinlock::Mutex;
+use crate::{println, print};
 
+/// UART base address on QEMU RISC-V
+pub const UART_BASE_ADDR: usize = 0x1000_0000;
+
+/// UART driver
 pub struct Uart {
+    /// UART MMIO base address
     base_address: usize,
 }
 
@@ -19,12 +30,13 @@ impl Write for Uart {
 }
 
 impl Uart {
-    pub fn new(base_address: usize) -> Self {
+    pub const fn new(base_address: usize) -> Self {
         Uart {
             base_address
         }
     }
 
+    /// Initialize UART driver
     pub fn init(&mut self) {
         let ptr = self.base_address as *mut u8;
         unsafe {
@@ -89,13 +101,22 @@ impl Uart {
         }
     }
 
+    /// Put a character into UART
     pub fn put(&mut self, c: u8) {
         let ptr = self.base_address as *mut u8;
+        loop {
+            // Wait until previous data is flushed
+            if unsafe { ptr.add(5).read_volatile() } & (1 << 5) != 0 {
+                break;
+            }
+        }
         unsafe {
+            // Write data
             ptr.add(0).write_volatile(c);
         }
     }
 
+    /// Get a character from UART
     pub fn get(&mut self) -> Option<u8> {
         let ptr = self.base_address as *mut u8;
         unsafe {
@@ -108,4 +129,41 @@ impl Uart {
             }
         }
     }
+}
+
+/// Process UART interrupt. Should only be called when interrupt.
+pub fn uartintr() {
+    let mut uart = UART().lock();
+    if let Some(c) = uart.get() {
+        drop(uart);
+        match c {
+            8 => {
+                // This is a backspace, so we
+                // essentially have to write a space and
+                // backup again:
+                print!("{} {}", 8 as char, 8 as char);
+            }
+            10 | 13 => {
+                // Newline or carriage-return
+                println!();
+            }
+            _ => {
+                print!("{}", c as char);
+                // if c == 97 {
+                //     crate::process::debug();
+                // }
+            }
+        }
+    }
+}
+
+/// UART driver object
+static __UART: Mutex<Uart> = Mutex::new(Uart::new(UART_BASE_ADDR), "uart driver");
+
+/// Global function to get an instance of UART driver
+#[allow(non_snake_case)]
+pub fn UART() -> &'static Mutex<Uart> { &__UART }
+
+pub unsafe fn init() {
+    UART().get().init();
 }
