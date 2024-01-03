@@ -179,7 +179,7 @@ pub fn exec(path: &str) {
     let mut content: Box<[u8; 131072]> = Box::new([0; 131072]);
     {
         let f = FsFile::open(path, 0);
-        info!("FsFile: size = {}", f.sz);
+        // info!("FsFile: size = {}", f.sz);
         let mut blk = [0; 1024];
         let mut i = 0;
         while f.read(&mut blk) == 1024 {

@@ -33,18 +33,17 @@ tasks:
     cmds:
       - cargo build {{.release_flag}} -p kernel
       - RUSTFLAGS="-C link-arg=-T{{.user_linker_script}}" cargo build {{.release_flag}} -p user
-      - "{{.strip}} -g {{.target_path}}/init"
+      - "{{.strip}} -g {{.target_path}}/init {{.target_path}}/test1 {{.target_path}}/test2 {{.target_path}}/test3"
 
   mkfs:
     cmds:
       - g++ fs/fs.cpp -o fs/mkfs --std=c++11
-      - ./fs/mkfs hdd.img {{.user_libs}}/init ./fs/test.txt
+      - ./fs/mkfs hdd.img ./fs/test.txt {{.user_libs}}/init {{.user_libs}}/test1 {{.user_libs}}/test2 {{.user_libs}}/test3
 
   build_image:
-    deps:
-      - build
-      - mkfs
     cmds:
+      - task: build
+      - task: mkfs
       - "{{.riscvcc}} {{.cflags}} -T{{.kernel_linker_script}} -o {{.kernel_out}} {{.assembly_files}} {{.cxx_files}} -L{{.kernel_libs}} {{.kernel_lib}}"
       - "{{.riscvcc}} {{.cflags}} -T{{.user_linker_script}} -o initcode.elf {{.u}}/initcode.S {{.u}}/syscall.h"
       - "{{.objcopy}} -S -O binary initcode.elf initcode"
