@@ -106,10 +106,7 @@ use crate::println;
 
 pub fn debug() {
     for i in 0..NCPUS {
-        match unsafe { &CPUS[i].process } {
-            Some(x) => { println!("{} running on hart {}", x.pid, i); }
-            _ => {}
-        }
+        if let Some(x) = unsafe { &CPUS[i].process } { println!("{} running on hart {}", x.pid, i); }
     }
     let pool = unsafe { PROCS_POOL.get() };
     for i in 0..NMAXPROCS {

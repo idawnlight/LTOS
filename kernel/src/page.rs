@@ -228,7 +228,7 @@ impl Table {
                     let w_flag = if v.is_w() { "W" } else { "" };
                     let x_flag = if v.is_x() { "X" } else { "" };
                     let vaddr = (vpn << 9 | i) << 12;
-                    if vaddr != v.paddr().0 || true {
+                    if vaddr != v.paddr().0 {
                         for _j in 0..(2 - level) {
                             print!(".");
                         }
@@ -266,7 +266,7 @@ impl Table {
 
     /* TODO: use same function for drop_walk, unmap_user and walk */
 
-    fn drop_walk(&mut self, level: usize) {
+    fn drop_walk(&mut self, _level: usize) {
         for i in 0..self.len() {
             let v = &mut self.entries[i];
             if v.is_v() {
@@ -278,13 +278,13 @@ impl Table {
                 } else {
                     // drop page table
                     let mut table = unsafe { Box::from_raw(v.paddr().0 as *mut Table) };
-                    table.drop_walk(level - 1);
+                    table.drop_walk(_level - 1);
                 }
             }
         }
     }
 
-    fn clone_walk(&self, level: usize) -> Box<Self> {
+    fn clone_walk(&self, _level: usize) -> Box<Self> {
         let mut pgtable = Table::new();
         for i in 0..self.len() {
             let v = &self.entries[i];
@@ -296,7 +296,7 @@ impl Table {
                     }
                 } else {
                     let table = unsafe { (v.paddr().0 as *mut Table).as_mut().unwrap() };
-                    let pg = table.clone_walk(level - 1);
+                    let pg = table.clone_walk(_level - 1);
                     pgtable.entries[i] = Entry::new(Box::into_raw(pg) as usize, v.flags());
                 }
             }

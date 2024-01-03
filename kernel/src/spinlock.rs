@@ -121,6 +121,7 @@ impl<T: ?Sized> Mutex<T> {
     }
 
     /// Directly get mutex data regardless whether it is locked or not
+    #[allow(clippy::mut_from_ref)]
     pub unsafe fn get(&self) -> &mut T {
         &mut *self.data.get()
     }

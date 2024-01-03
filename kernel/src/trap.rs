@@ -1,5 +1,4 @@
-use crate::cpu::{sstatus_write};
-use crate::{println, cpu, arch, page, syscall, process};
+use crate::{println, arch, page, syscall, process};
 use crate::arch::hart_id;
 use crate::intr::devintr;
 use crate::intr::Intr::Timer;
@@ -16,7 +15,7 @@ extern "C" fn kerneltrap() {
     let cause = register::scause::read();
     let hart = hart_id();
     let sstatus = register::sstatus::read();
-    let sstatus_bits = cpu::sstatus_read();
+    let sstatus_bits = arch::sstatus_read();
 
     // We're going to handle all traps in machine mode. RISC-V lets
     // us delegate to supervisor mode, but switching out SATP (virtual memory)
@@ -28,7 +27,7 @@ extern "C" fn kerneltrap() {
     if sstatus.spp() != register::sstatus::SPP::Supervisor {
         panic!("not from supervisor mode, async {}, hart {}, {:x}, epc {:x}, tval {}", is_async, hart, cause_num, epc, tval);
     }
-    if cpu::intr_get() {
+    if arch::intr_get() {
         panic!("interrupt not disabled");
     }
 
@@ -102,7 +101,7 @@ extern "C" fn kerneltrap() {
     }
 
     register::sepc::write(epc);
-    sstatus_write(sstatus_bits);
+    arch::sstatus_write(sstatus_bits);
 }
 
 /// Called by `uservec` in `trampoline.S`, return from user space.
@@ -126,10 +125,7 @@ pub extern "C" fn usertrap() -> ! {
         p.trapframe.regs[Register::a0 as usize] = syscall::syscall() as usize;
     } else {
         intr = devintr();
-        match intr {
-            None => panic!("unexpected scause {:x}", scause),
-            _ => ()
-        }
+        if intr.is_none() { panic!("unexpected scause {:x}", scause) }
     }
 
     if intr == Some(Timer) {
@@ -173,8 +169,8 @@ pub fn usertrapret() -> ! {
         let p = my_proc();
         p.trapframe.satp = satp::read().bits();
         p.trapframe.sp = p.kstack_sp;
-        p.trapframe.trap = crate::trap::usertrap as usize;
-        p.trapframe.hartid = arch::hart_id();
+        p.trapframe.trap = usertrap as usize;
+        p.trapframe.hartid = hart_id();
 
         // println!("trap 0x{:x}", proc_cpu.process.trapframe.trap);
 
@@ -189,7 +185,7 @@ pub fn usertrapret() -> ! {
 
         // tell trampoline.S the user page table to switch to.
         let root_ppn = &mut *p.pgtable as *mut page::Table as usize;
-        satp_val = crate::arch::build_satp(8, 0, root_ppn);
+        satp_val = arch::build_satp(8, 0, root_ppn);
     }
     // jump to trampoline.S at the top of memory, which
     // switches to the user page table, restores user registers,
@@ -200,5 +196,5 @@ pub fn usertrapret() -> ! {
 /// Initialize supervisor-mode trap
 pub unsafe fn hartinit() {
     use riscv::register::*;
-    stvec::write(crate::symbols::kernelvec as usize, stvec::TrapMode::Direct);
+    stvec::write(kernelvec as usize, stvec::TrapMode::Direct);
 }

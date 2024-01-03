@@ -6,7 +6,7 @@
 //! Handle interrupts
 
 use riscv::register::*;
-use crate::{cpu, plic, println};
+use crate::{arch, plic, println};
 use crate::uart::uartintr;
 use crate::virtio::virtiointr;
 // use crate::uart::uartintr;
@@ -25,7 +25,7 @@ pub fn devintr() -> Option<Intr> {
     let cause = scause::read();
 
     if cause.is_interrupt() && cause.code() == 9 {
-        let plic = crate::plic::PLIC();
+        let plic = plic::PLIC();
         if let Some(interrupt) = plic.next() {
             match interrupt {
                 plic::UART0_IRQ => {
@@ -42,7 +42,7 @@ pub fn devintr() -> Option<Intr> {
         }
         Some(Intr::Device)
     } else if cause.is_interrupt() && cause.code() == 1 {
-        cpu::sip_write(cpu::sip_read() & !2);
+        arch::sip_write(sip::read().bits() & !2);
         Some(Intr::Timer)
     } else {
         None

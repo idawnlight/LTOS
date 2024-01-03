@@ -10,7 +10,6 @@ use core::arch::asm;
 pub mod uart;
 pub mod page;
 pub mod trap;
-pub mod cpu;
 pub mod plic;
 pub mod syscall;
 pub mod clint;

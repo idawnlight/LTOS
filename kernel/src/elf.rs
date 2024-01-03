@@ -108,9 +108,8 @@ fn load_segment(
     let num_pages = mem::align_val(sz, PAGE_ORDER) / PAGE_SIZE;
     for i in 0..num_pages {
         let mut seg = page::Page::new();
-        let src = elf as *const u8;
         unsafe {
-            let src = src.add(offset + i * PAGE_SIZE);
+            let src = elf.add(offset + i * PAGE_SIZE);
             core::ptr::copy(src, seg.data.as_mut_ptr(), PAGE_SIZE);
         }
         use page::EntryAttributes;

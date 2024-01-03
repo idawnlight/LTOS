@@ -53,6 +53,35 @@ pub fn hart_id() -> usize {
     rval
 }
 
+pub fn sip_write(val: usize) {
+    unsafe {
+        asm!(
+        "csrw sip, {0}",
+        in(reg) val,
+        );
+    }
+}
+
+pub fn sstatus_read() -> usize {
+    let rval: usize;
+    unsafe {
+        asm!(
+        "csrr {0}, sstatus",
+        out(reg) rval,
+        );
+    }
+    rval
+}
+
+pub fn sstatus_write(val: usize) {
+    unsafe {
+        asm!(
+        "csrw sstatus, {0}",
+        in(reg) val,
+        );
+    }
+}
+
 #[inline(always)]
 pub fn __sync_synchronize() {
     core::sync::atomic::compiler_fence(Ordering::SeqCst);

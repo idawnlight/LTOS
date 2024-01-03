@@ -29,7 +29,7 @@ pub enum ProcessState {
 #[repr(C)]
 #[repr(align(4096))]
 pub struct Process {
-    pub pgtable: Box<page::Table>,
+    pub pgtable: Box<Table>,
     pub trapframe: Box<TrapFrame>,
     pub context: Box<Context>,
     pub state: ProcessState,
@@ -43,7 +43,7 @@ pub struct Process {
 
 impl Process {
     pub fn new(pid: i32) -> Self {
-        Self::from_exist(pid, Box::new(page::Table::new()), Box::new(TrapFrame::zero()))
+        Self::from_exist(pid, Box::new(Table::new()), Box::new(TrapFrame::zero()))
     }
 
     pub fn from_exist(pid: i32, pgtable: Box<Table>, trapframe: Box<TrapFrame>) -> Self {
@@ -70,7 +70,7 @@ impl Process {
         p.pgtable.kernel_map(
             TRAMPOLINE_START,
             TRAMPOLINE_TEXT_START(),
-            page::EntryAttributes::RX as usize,
+            EntryAttributes::RX as usize,
         );
 
         let trapframe = &*p.trapframe as *const _ as usize;
@@ -78,7 +78,7 @@ impl Process {
         p.pgtable.kernel_map(
             TRAPFRAME_START,
             trapframe,
-            page::EntryAttributes::RW as usize,
+            EntryAttributes::RW as usize,
         );
         p.context.regs[ContextRegisters::ra as usize] = forkret as usize;
         p.context.regs[ContextRegisters::sp as usize] = p.kstack + PAGE_SIZE;
@@ -129,10 +129,7 @@ pub fn init_proc() {
 pub fn find_available_pid() -> Option<i32> {
     let pool = PROCS_POOL.lock();
     for i in 0..NMAXPROCS {
-        match &pool[i] {
-            ProcInPool::NoProc => return Some(i as i32),
-            _ => {}
-        }
+        if let ProcInPool::NoProc = &pool[i] { return Some(i as i32) }
     }
     None
 }
@@ -161,11 +158,11 @@ pub const USER_STACK_PAGE: usize = 4;
 /// map user stack in `pgtable` at `stack_begin` and returns `sp`
 pub fn map_stack(pgtable: &mut Table, stack_begin: usize) -> usize {
     for i in 0..USER_STACK_PAGE {
-        let stack = page::Page::new();
+        let stack = Page::new();
         pgtable.map(
             stack_begin + i * PAGE_SIZE,
             stack,
-            page::EntryAttributes::URW as usize,
+            EntryAttributes::URW as usize,
         );
     }
 
