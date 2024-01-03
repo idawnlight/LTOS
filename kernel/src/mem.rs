@@ -57,8 +57,8 @@ impl Allocator {
     }
 
     fn offset_addr_of(&self, id: usize) -> usize {
-        let addr = self.base_addr + id * PAGE_SIZE;
-        addr
+        
+        self.base_addr + id * PAGE_SIZE
     }
 
     unsafe fn offset_id_of(&self, id: usize) -> *mut u8 {
@@ -66,8 +66,8 @@ impl Allocator {
     }
 
     fn offset_page_of(&self, page: *mut u8) -> usize {
-        let id = (page as usize - self.base_addr) / PAGE_SIZE;
-        id
+        
+        (page as usize - self.base_addr) / PAGE_SIZE
     }
 
     pub fn allocate(&mut self, size: usize) -> *mut u8 {
@@ -132,7 +132,7 @@ pub unsafe fn init() {
     ALLOC().get().base_addr = align_val(HEAP_START(), PAGE_ORDER);
 
     // workaround for non-zero data region
-    let mut alloc = ALLOC().get();
+    let alloc = ALLOC().get();
     for i in 0..MAX_PAGE {
         alloc.page_allocated[i] = 0;
     }
@@ -244,7 +244,7 @@ pub unsafe fn zero_volatile<T>(range: Range<*mut T>)
 }
 
 pub fn debug() {
-    for i in 0x8004f000 as u64..0x80093058 {
+    for i in 0x8004f000_u64..0x80093058 {
         let d = unsafe { core::ptr::read(i as *const u8) };
         if d != 0 {
             println!("0x{:x}: {:x}", i, d);

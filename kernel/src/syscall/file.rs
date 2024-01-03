@@ -10,8 +10,8 @@ use crate::process::my_proc;
 use crate::syscall::{arg_int, arg_uint, arg_ptr, arg_fd, arg_ptr_mut};
 use crate::file::{File, Console, FsFile};
 use alloc::sync::Arc;
-use crate::spinlock::Mutex;
-use crate::symbols::PAGE_SIZE;
+
+
 use crate::virtio::BSIZE;
 
 /// write syscall
@@ -23,7 +23,7 @@ pub fn sys_write() -> i32 {
     }
     let content = arg_ptr(&p.pgtable, &p.trapframe, 1, sz);
     let u8_slice = unsafe { core::slice::from_raw_parts(content, sz) };
-    let file = arg_fd(&p, 0);
+    let file = arg_fd(p, 0);
     match (*file).as_ref() {
         File::Device(dev) => dev.write(u8_slice),
         File::FsFile(file) => file.write(u8_slice),
@@ -40,7 +40,7 @@ pub fn sys_read() -> i32 {
     }
     let content = arg_ptr_mut(&p.pgtable, &p.trapframe, 1, sz);
     let u8_slice = unsafe { core::slice::from_raw_parts_mut(content, sz) };
-    let file = arg_fd(&p, 0);
+    let file = arg_fd(p, 0);
     match (*file).as_ref() {
         File::Device(dev) => dev.read(u8_slice),
         File::FsFile(file) => file.read(u8_slice),
@@ -56,7 +56,7 @@ fn next_available_fd<T>(files: &[Option<T>]) -> Option<usize> {
             _ => { continue; }
         }
     }
-    return None;
+    None
 }
 
 /// open syscall, currently only support `/console` file.
@@ -75,7 +75,7 @@ pub fn sys_open() -> i32 {
     } else {
         p.files[fd] = Some(Arc::new(File::FsFile(FsFile::open(path, mode))));
     }
-    return fd as i32;
+    fd as i32
 }
 
 /// close syscall
@@ -95,6 +95,6 @@ pub fn sys_dup() -> i32 {
         None => { return -1; }
     };
     p.files[fd] = Some(p.files[old_fd].as_ref().unwrap().clone());
-    use crate::info;
+    
     fd as i32
 }

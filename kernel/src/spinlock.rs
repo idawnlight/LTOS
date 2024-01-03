@@ -32,7 +32,7 @@
 use core::cell::UnsafeCell;
 use core::marker::Sync;
 use core::ops::{Drop, Deref, DerefMut};
-use core::default::Default;
+
 use crate::arch;
 use crate::process::{IntrLockGuard, my_cpu};
 
@@ -128,11 +128,11 @@ impl<T: ?Sized> Mutex<T> {
 
 impl<'a, T: ?Sized> Deref for MutexGuard<'a, T> {
     type Target = T;
-    fn deref<'b>(&'b self) -> &'b T { &*self.data }
+    fn deref(&self) -> &T { &*self.data }
 }
 
 impl<'a, T: ?Sized> DerefMut for MutexGuard<'a, T> {
-    fn deref_mut<'b>(&'b mut self) -> &'b mut T { &mut *self.data }
+    fn deref_mut(&mut self) -> &mut T { &mut *self.data }
 }
 
 impl<'a, T: ?Sized> Drop for MutexGuard<'a, T> {
@@ -143,7 +143,7 @@ impl<'a, T: ?Sized> Drop for MutexGuard<'a, T> {
         }
         unsafe { *self.mutex.hart.get() = -1; }
         arch::__sync_synchronize();
-        arch::__sync_lock_release(&self.lock);
+        arch::__sync_lock_release(self.lock);
         // panic_println!("{} unlock on {}", self.mutex.name, arch::hart_id());
     }
 }

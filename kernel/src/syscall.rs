@@ -18,15 +18,15 @@ mod file;
 
 pub use gen::*;
 use crate::process::{TrapFrame, Register, my_proc, fork, exec, exit, Process};
-use crate::{info, panic, print, println};
+use crate::{info};
 use crate::page;
-use crate::mem::{align_val, page_down};
-use crate::symbols::{PAGE_ORDER, PAGE_SIZE};
+use crate::mem::{page_down};
+use crate::symbols::{PAGE_SIZE};
 use file::*;
 use alloc::sync::Arc;
 use crate::file::File;
-use alloc::boxed::Box;
-use crate::spinlock::Mutex;
+
+
 
 /// Get the `pos`th argument from syscall
 pub fn argraw(tf: &TrapFrame, pos: usize) -> usize {
@@ -76,7 +76,7 @@ pub fn arg_ptr_mut(pgtable: &page::Table, tf: &TrapFrame, pos: usize, sz: usize)
 pub fn arg_fd(p: &Process, pos: usize) -> &Arc<File> {
     let fd = argraw(&p.trapframe, pos);
     match &p.files[fd] {
-        Some(x) => return x,
+        Some(x) => x,
         None => panic!("invalid file handler {}", fd)
     }
 }

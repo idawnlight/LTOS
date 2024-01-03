@@ -5,7 +5,7 @@
 
 //! Test runner
 
-use crate::virtio;
+
 use crate::info;
 
 type TestSuite = fn() -> &'static [(&'static str, fn())];

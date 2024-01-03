@@ -5,13 +5,13 @@
 
 //! ELF parsing
 
-use crate::panic;
+
 use crate::mem;
-use crate::arch;
+
 use crate::page;
-use crate::process;
+
 use crate::symbols::*;
-use crate::{info, println};
+use crate::{println};
 
 #[repr(C)]
 pub struct ELFHeader {

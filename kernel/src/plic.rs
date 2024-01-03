@@ -5,12 +5,12 @@
 
 //! RISC-V Platform-Level Interrupt Controller
 
-use crate::spinlock::Mutex;
-use crate::process::my_cpu;
+
+
 use crate::arch::hart_id;
 
 pub const PLIC_BASE: usize = 0x0c00_0000;
-pub const PLIC_PRIORITY: usize = PLIC_BASE + 0x0;
+pub const PLIC_PRIORITY: usize = PLIC_BASE;
 pub const PLIC_PENDING: usize = PLIC_BASE + 0x1000;
 pub const PLIC_MENABLE_BASE: usize = PLIC_BASE + 0x2000;
 pub const PLIC_SENABLE_BASE: usize = PLIC_BASE + 0x2080;
@@ -92,8 +92,8 @@ impl Plic {
     pub unsafe fn is_pending(&mut self, id: u32) -> bool {
         let pend = PLIC_PENDING as *const u32;
         let actual_id = 1 << id;
-        let pend_ids;
-        pend_ids = pend.read_volatile();
+        
+        let pend_ids = pend.read_volatile();
         actual_id & pend_ids != 0
     }
 

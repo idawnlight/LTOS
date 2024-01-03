@@ -5,7 +5,7 @@
 
 //! virt-io driver
 
-use crate::spinlock::{Mutex, MutexGuard};
+use crate::spinlock::{Mutex};
 use crate::symbols::{PAGE_SIZE, PAGE_ORDER};
 use crate::process::{wakeup, sleep};
 use alloc::boxed::Box;
@@ -276,7 +276,7 @@ impl VirtIO {
         use VIRTIO_CONFIG_S::*;
         use VIRTIO_FEATURE::*;
 
-        let mut vio = self.0.get();
+        let vio = self.0.get();
 
         if MAGIC_VALUE.ptr().read_volatile() != 0x74726976 {
             panic!("cannot find virtio disk: magic value");
@@ -400,7 +400,7 @@ impl VirtIO {
 
             __sync_synchronize();
 
-            vio.avail[1] = vio.avail[1] + 1;
+            vio.avail[1] += 1;
 
             unsafe { QUEUE_NOTIFY.ptr().write_volatile(0); }
             // info!("{:x}", &vio.info[idx[0]].as_ref().unwrap().status as *const _ as usize);
@@ -410,7 +410,7 @@ impl VirtIO {
                 vio = sleep(buf_addr, vio);
             }
         }
-        let result = core::mem::replace(&mut vio.info[idx[0]], None);
+        let result = vio.info[idx[0]].take();
         unsafe { vio.info[idx[0]] = core::mem::zeroed(); }
         vio.info[idx[0]] = None;
         vio.free_chain(idx[0]);
@@ -445,7 +445,7 @@ pub unsafe fn init() {
 
 /// VIRTIO interrupt
 pub fn virtiointr() {
-    use crate::info;
+    
     let mut disk = VIRTIO().0.lock();
     while disk.used_idx as usize % DESC_NUM != disk.used[0].id as usize % DESC_NUM {
 

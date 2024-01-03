@@ -15,7 +15,7 @@ pub fn build_satp(mode: usize, asid: usize, addr: usize) -> usize {
     if addr % PAGE_SIZE != 0 {
         panic!("satp not aligned!");
     }
-    (mode as usize) << 60 | (asid & 0xffff) << 44 | (addr >> 12) & 0xff_ffff_ffff
+    mode << 60 | (asid & 0xffff) << 44 | (addr >> 12) & 0xff_ffff_ffff
 }
 
 /// Enable interrupt

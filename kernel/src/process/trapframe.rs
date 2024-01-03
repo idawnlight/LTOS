@@ -5,7 +5,7 @@
 
 #![allow(non_camel_case_types)]
 
-use core::ptr::null_mut;
+
 
 /// Trap frame contains information for switching to
 /// and switching back from user space

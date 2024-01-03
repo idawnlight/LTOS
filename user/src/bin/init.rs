@@ -5,12 +5,10 @@
 
 #![no_std]
 #![no_main]
-#![feature(asm)]
-#![feature(global_asm)]
 #![feature(format_args_nl)]
 
 use user::println;
-use user::syscall::{fork, exec, open, dup};
+use user::syscall::{fork, open, dup};
 
 #[no_mangle]
 pub unsafe extern "C" fn _start() -> ! {

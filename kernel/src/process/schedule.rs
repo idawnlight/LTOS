@@ -3,7 +3,7 @@
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
 
-use crate::{arch, info};
+use crate::{arch};
 use crate::symbols::*;
 use crate::process::{ProcInPool, PROCS_POOL, ProcessState, swtch, Context, my_cpu, Process};
 use alloc::boxed::Box;
@@ -53,7 +53,7 @@ pub fn scheduler() -> ! {
             // info!("scheduler {}: switching to {}", arch::hart_id(), p.pid);
             swtch(&mut c.scheduler_context, *ctx);
             // info!("scheduler {}: come back", arch::hart_id());
-            let p = core::mem::replace(&mut c.process, None).unwrap();
+            let p = c.process.take().unwrap();
             lst_pid = p.pid as usize + 1;
             if lst_pid >= NMAXPROCS {
                 lst_pid = 0;

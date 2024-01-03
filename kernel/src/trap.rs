@@ -1,5 +1,5 @@
-use crate::cpu::{sstatus_write, TrapFrame};
-use crate::{print, println, plic, uart, cpu, arch, page, syscall, process};
+use crate::cpu::{sstatus_write};
+use crate::{println, cpu, arch, page, syscall, process};
 use crate::arch::hart_id;
 use crate::intr::devintr;
 use crate::intr::Intr::Timer;
@@ -170,7 +170,7 @@ pub fn usertrapret() -> ! {
 
         // set up trapframe values that uservec will need when
         // the process next re-enters the kernel.
-        let mut p = my_proc();
+        let p = my_proc();
         p.trapframe.satp = satp::read().bits();
         p.trapframe.sp = p.kstack_sp;
         p.trapframe.trap = crate::trap::usertrap as usize;

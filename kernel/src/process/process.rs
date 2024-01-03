@@ -3,13 +3,13 @@
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
 
-use crate::{page, panic, info, warn};
+use crate::{page, info};
 use crate::symbols::*;
 use crate::mem;
 use crate::arch;
 use crate::trap::usertrapret;
 use alloc::boxed::Box;
-use crate::process::{my_proc, PROCS_POOL, my_cpu, ProcInPool, Register, put_back_proc, sched, TrapFrame};
+use crate::process::{my_proc, PROCS_POOL, ProcInPool, Register, put_back_proc, sched, TrapFrame};
 use crate::page::{Page, Table, EntryAttributes};
 use crate::spinlock::{Mutex, MutexGuard};
 use alloc::sync::Arc;
@@ -148,10 +148,7 @@ pub fn fork() -> i32 {
     let trapframe = Box::new(*p.trapframe.clone());
     let mut fork_p = Process::from_exist(f_pid, pgtable, trapframe);
     for i in 0..fork_p.files.len() {
-        fork_p.files[i] = match &p.files[i] {
-            Some(x) => Some(x.clone()),
-            None => None
-        }
+        fork_p.files[i] = p.files[i].as_ref().cloned()
     }
     fork_p.trapframe.regs[Register::a0 as usize] = 0;
     fork_p.state = ProcessState::RUNNABLE;
@@ -210,7 +207,7 @@ pub fn exec(path: &str) {
 }
 
 /// exit syscall
-pub fn exit(status: i32) -> ! {
+pub fn exit(_status: i32) -> ! {
     {
         let p = my_proc();
         if p.pid == 0 {

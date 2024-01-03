@@ -5,9 +5,9 @@
 
 #![allow(non_camel_case_types)]
 
-use crate::{println, panic, info};
+
 use crate::process::{my_cpu, my_proc, ProcessState};
-use crate::spinlock::MutexGuard;
+
 
 /// Kernel context
 #[repr(C)]

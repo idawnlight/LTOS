@@ -6,7 +6,7 @@
 //! File on file system
 
 use crate::virtio::{VIRTIO, VirtIO, BSIZE};
-use crate::{print, println};
+
 use crate::spinlock::Mutex;
 
 pub struct FsFile {
@@ -50,7 +50,7 @@ impl FsFile {
         None
     }
 
-    pub fn open(path: &str, mode: usize) -> Self {
+    pub fn open(path: &str, _mode: usize) -> Self {
         let virtio = VIRTIO();
         let (offset, sz) = match Self::get_file_info(virtio, path) {
             Some(x) => x,
@@ -66,7 +66,7 @@ impl FsFile {
     }
 
     pub fn read(&self, content: &mut [u8]) -> i32 {
-        use crate::info;
+        
         if !self.readable { return -1; }
         let virtio = VIRTIO();
         let read_offset = self.rw_offset.lock().0;
@@ -78,10 +78,10 @@ impl FsFile {
         }
         self.rw_offset.lock().0 = read_offset + read_sz;
         // println!("off: {:x}, rsz: {:x}, sz: {:x}", read_offset, read_sz, self.sz);
-        return read_sz as i32;
+        read_sz as i32
     }
 
-    pub fn write(&self, content: &[u8]) -> i32 {
+    pub fn write(&self, _content: &[u8]) -> i32 {
         if !self.writable { return -1; }
         unimplemented!()
     }
@@ -98,11 +98,11 @@ pub mod tests {
         ]
     }
 
-    use crate::{print, println};
+    
 
     /// Test open
     pub fn test_open() {
-        let f = FsFile::open("/test.txt", 0);
+        let _f = FsFile::open("/test.txt", 0);
     }
 
     /// Test read

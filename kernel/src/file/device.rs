@@ -30,7 +30,7 @@ impl Device for Console {
                 _ => { return i as i32; }
             }
         }
-        return content.len() as i32;
+        content.len() as i32
     }
 
     /// write to console
@@ -39,6 +39,6 @@ impl Device for Console {
         for i in 0..content.len() {
             uart.put(content[i]);
         }
-        return content.len() as i32;
+        content.len() as i32
     }
 }

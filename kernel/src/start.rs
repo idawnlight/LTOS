@@ -1,6 +1,6 @@
 use core::arch::asm;
 use riscv::register::*;
-use crate::{arch, clint, cpu, info, mem, plic, print, println, process, trap, uart, virtio};
+use crate::{clint, info, mem, plic, process, trap, uart, virtio};
 use crate::arch::hart_id;
 
 #[no_mangle]
@@ -68,7 +68,7 @@ extern "C" fn kmain() {
         }
     } else {
         loop {
-            if unsafe { MAY_BOOT } == true {
+            if unsafe { MAY_BOOT } {
                 break;
             }
         }

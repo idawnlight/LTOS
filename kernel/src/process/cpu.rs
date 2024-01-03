@@ -94,10 +94,8 @@ impl<'a> Drop for IntrLockGuard<'_> {
             }
             let cnt = self.lock.cnt.get();
             *cnt -= 1;
-            if *cnt == 0 {
-                if self.lock.is_enabled_before {
-                    arch::intr_on();
-                }
+            if *cnt == 0 && self.lock.is_enabled_before {
+                arch::intr_on();
             }
             if *cnt < 0 {
                 panic!("cnt < 0");

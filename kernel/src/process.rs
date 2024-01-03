@@ -19,7 +19,7 @@ use crate::symbols::*;
 use crate::spinlock::Mutex;
 use crate::arch;
 use alloc::boxed::Box;
-use core::borrow::BorrowMut;
+
 
 /// An array holding all CPU information
 static mut CPUS: [CPU; NCPUS] = [const { CPU::zero() }; NCPUS];
