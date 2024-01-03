@@ -140,6 +140,7 @@ pub unsafe fn init() {
         alloc.page_allocated[i] = 0;
     }
 
+    #[allow(invalid_reference_casting)]
     let pgtable: &mut Table = &mut *(&KERNEL_PGTABLE as *const _ as *mut _); // to bypass mut ref
     pgtable.id_map_range(
         TEXT_START(),
@@ -172,8 +173,8 @@ pub unsafe fn init() {
         EntryAttributes::RW as usize,
     );
     pgtable.kernel_map(
-        VIRTIO_MMIO_BASE,
-        VIRTIO_MMIO_BASE,
+        MMIO_VIRTIO_START,
+        MMIO_VIRTIO_START,
         EntryAttributes::RW as usize,
     );
     pgtable.kernel_map(
@@ -196,7 +197,7 @@ pub fn hartinit() {
     let root_ppn = &KERNEL_PGTABLE as *const Table as usize;
     let satp_val = arch::build_satp(8, 0, root_ppn);
     unsafe {
-        llvm_asm!("csrw satp, $0" :: "r"(satp_val));
+        satp::write(satp_val);
         asm::sfence_vma(0, 0);
     }
 }
@@ -207,9 +208,7 @@ pub fn ALLOC() -> &'static Mutex<Allocator> { &__ALLOC }
 use core::alloc::{GlobalAlloc, Layout};
 use crate::plic::PLIC_BASE;
 use crate::clint::CLINT_BASE;
-use crate::arch::hart_id;
-use crate::process::my_cpu;
-use crate::virtio::VIRTIO_MMIO_BASE;
+use crate::virtio::MMIO_VIRTIO_START;
 
 struct OsAllocator {}
 
@@ -226,7 +225,7 @@ unsafe impl GlobalAlloc for OsAllocator {
 #[global_allocator]
 static GA: OsAllocator = OsAllocator {};
 
-#[alloc_error_handler]
+// #[alloc_error_handler]
 pub fn alloc_error(l: Layout) -> ! {
     panic!(
         "Allocator failed to allocate {} bytes with {}-byte alignment.",

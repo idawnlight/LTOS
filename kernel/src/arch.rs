@@ -2,11 +2,20 @@ use core::arch::asm;
 use core::sync::atomic::Ordering;
 use core::time::Duration;
 use riscv::register::*;
+use crate::symbols::PAGE_SIZE;
 
 /// Get current time from MMIO
 pub fn time() -> Duration {
     let mtime = crate::clint::CLINT_MTIME_BASE as *const u64;
     Duration::from_nanos(unsafe { mtime.read_volatile() } * 100)
+}
+
+/// Build satp value from mode, asid and page table base addr
+pub fn build_satp(mode: usize, asid: usize, addr: usize) -> usize {
+    if addr % PAGE_SIZE != 0 {
+        panic!("satp not aligned!");
+    }
+    (mode as usize) << 60 | (asid & 0xffff) << 44 | (addr >> 12) & 0xff_ffff_ffff
 }
 
 /// Enable interrupt

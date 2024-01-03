@@ -3,6 +3,7 @@
 // Stephen Marz
 // 1 Nov 2019
 
+pub const PLIC_BASE: usize = 0x0c00_0000;
 const PLIC_PRIORITY: usize = 0x0c00_0000;
 const PLIC_PENDING: usize = 0x0c00_1000;
 const PLIC_INT_ENABLE: usize = 0x0c00_2000;

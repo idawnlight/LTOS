@@ -1,6 +1,6 @@
 use core::arch::asm;
 use riscv::register::*;
-use crate::{clint, cpu, info, print, println, uart};
+use crate::{clint, cpu, info, mem, print, println, uart};
 use crate::arch::hart_id;
 
 #[no_mangle]
@@ -47,8 +47,8 @@ extern "C" fn kmain() {
         unsafe { uart::init(); }
         info!("booting LTOS on hart {}...", hart_id());
         info!("  UART... \x1b[0;32minitialized\x1b[0m");
-        // unsafe { mem::init(); }
-        // info!("  kernel page table... \x1b[0;32minitialized\x1b[0m");
+        unsafe { mem::init(); }
+        info!("  kernel page table... \x1b[0;32minitialized\x1b[0m");
         // unsafe { virtio::init(); }
         // info!("  virt-io... \x1b[0;32minitialized\x1b[0m");
         // unsafe { plic::init(); }

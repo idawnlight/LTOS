@@ -3,8 +3,7 @@
 // Stephen Marz
 // 10 March 2020
 
-use crate::{print, println, block, block::setup_block_device, page::PAGE_SIZE};
-use crate::rng::setup_entropy_device;
+use crate::{print, println, block, block::setup_block_device, symbols::PAGE_SIZE};
 use core::mem::size_of;
 
 // Flags
@@ -293,12 +292,12 @@ pub fn probe() {
                 // DeviceID 4 is a random number generator device
                 4 => {
                     print!("entropy device...");
-                    if false == setup_entropy_device(ptr) {
-                        println!("setup failed.");
-                    }
-                    else {
-                        println!("setup succeeded!");
-                    }
+                    // if false == setup_entropy_device(ptr) {
+                    //     println!("setup failed.");
+                    // }
+                    // else {
+                    //     println!("setup succeeded!");
+                    // }
                 },
                 // DeviceID 16 is a GPU device
                 16 => {

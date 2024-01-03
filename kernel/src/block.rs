@@ -3,11 +3,12 @@
 // Stephen Marz
 // 10 March 2020
 
-use crate::{print, println, kmem::{kfree, kmalloc},
-            page::{zalloc, PAGE_SIZE},
+use crate::{print, println,
+            symbols::PAGE_SIZE,
             virtio,
             virtio::{Descriptor, MmioOffsets, Queue, StatusField, VIRTIO_RING_SIZE}};
 use core::mem::size_of;
+use crate::mem::ALLOC;
 
 #[repr(C)]
 pub struct Geometry {
@@ -196,7 +197,7 @@ pub fn setup_block_device(ptr: *mut u32) -> bool {
         // then we and the device will refer to different memory addresses
         // and hence get the wrong data in the used ring.
         // ptr.add(MmioOffsets::QueueAlign.scale32()).write_volatile(2);
-        let queue_ptr = zalloc(num_pages) as *mut Queue;
+        let queue_ptr = ALLOC().lock().allocate(num_pages * PAGE_SIZE) as *mut Queue;
         let queue_pfn = queue_ptr as u32;
         ptr.add(MmioOffsets::GuestPageSize.scale32()).write_volatile(PAGE_SIZE as u32);
         // QueuePFN is a physical page number, however it
@@ -260,7 +261,7 @@ pub fn block_op(dev: usize, buffer: *mut u8, size: u32, offset: u64, write: bool
             // write OUTSIDE of the disk's size. So, we can read capacity from
             // the configuration space to ensure we stay within bounds.
             let blk_request_size = size_of::<Request>();
-            let blk_request = kmalloc(blk_request_size) as *mut Request;
+            let blk_request = ALLOC().lock().allocate(blk_request_size) as *mut Request;
             let desc = Descriptor { addr:  &(*blk_request).header as *const Header as u64,
                 len:   size_of::<Header>() as u32,
                 flags: virtio::VIRTIO_DESC_F_NEXT,
@@ -325,7 +326,7 @@ pub fn pending(bd: &mut BlockDevice) {
             let ref elem = queue.used.ring[bd.ack_used_idx as usize];
             bd.ack_used_idx = (bd.ack_used_idx + 1) % VIRTIO_RING_SIZE as u16;
             let rq = queue.desc[elem.id as usize].addr as *const Request;
-            kfree(rq as *mut u8);
+            ALLOC().lock().deallocate(rq as *mut u8);
             // TODO: Awaken the process that will need this I/O. This is
             // the purpose of the waiting state.
         }
