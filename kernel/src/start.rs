@@ -1,6 +1,6 @@
 use core::arch::asm;
 use riscv::register::*;
-use crate::{arch, clint, cpu, info, mem, plic, print, println, trap, uart, virtio};
+use crate::{arch, clint, cpu, info, mem, plic, print, println, process, trap, uart, virtio};
 use crate::arch::hart_id;
 
 #[no_mangle]
@@ -11,12 +11,11 @@ extern "C" fn kinit() {
     // as soon as possible.
     // Interrupts are disabled for the duration of kinit()
 
-    // configure Physical Memory Protection to give supervisor mode
-    // access to all of physical memory.
-    cpu::pmpaddr0_write(0x3fffffffffffff);
-    cpu::pmpcfg0_write(0xf);
-
     unsafe {
+        // configure Physical Memory Protection to give supervisor mode
+        // access to all of physical memory.
+        pmpaddr0::write(0x3fffffffffffff);
+        pmpcfg0::write(0xf);
         // next mode is supervisor mode
         mstatus::set_mpp(mstatus::MPP::Supervisor);
         // mret jump to kmain
@@ -49,8 +48,8 @@ extern "C" fn kmain() {
         info!("  UART... \x1b[0;32minitialized\x1b[0m");
         unsafe { mem::init(); }
         info!("  kernel page table... \x1b[0;32minitialized\x1b[0m");
-        // unsafe { virtio::init(); }
-        // info!("  virt-io... \x1b[0;32minitialized\x1b[0m");
+        unsafe { virtio::init(); }
+        info!("  virt-io... \x1b[0;32minitialized\x1b[0m");
         unsafe { plic::init(); }
         info!("  PLIC... \x1b[0;32minitialized\x1b[0m");
         mem::hartinit();
@@ -61,8 +60,8 @@ extern "C" fn kmain() {
         info!("  PLIC... \x1b[0;32minitialized\x1b[0m");
         unsafe { trap::hartinit(); }
         info!("  Interrupt... \x1b[0;32minitialized\x1b[0m");
-        // unsafe { process::init(); }
-        // process::init_proc();
+        process::init_proc();
+        info!("  Process... \x1b[0;32minitialized\x1b[0m");
         unsafe {
             asm!("fence");
             MAY_BOOT = true
@@ -79,5 +78,6 @@ extern "C" fn kmain() {
         plic::hartinit();
     }
 
-    cpu::wait_forever();
+    // cpu::wait_forever();
+    process::scheduler()
 }

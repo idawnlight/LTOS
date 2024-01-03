@@ -1,8 +1,11 @@
 **/target
 **/__pycache__
+**/.DS_Store
 
 .idea/
 
 hdd.img
-kernel.d
-kernel.elf
+kernel*
+initcode*
+
+fs/mkfs

@@ -39,5 +39,5 @@ pub unsafe fn timer_init() {
     mstatus::set_mie();
 
     // enable machine-mode timer interrupt.
-    mie::set_mtimer();
+    // mie::set_mtimer();
 }

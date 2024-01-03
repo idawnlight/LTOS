@@ -81,3 +81,11 @@ pub fn __sync_lock_release(a: &u32) {
         );
     }
 }
+
+pub fn wait_forever() -> ! {
+    loop {
+        unsafe {
+            riscv::asm::wfi();
+        }
+    }
+}

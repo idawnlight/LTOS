@@ -7,17 +7,14 @@
 
 use core::ops::Range;
 use crate::info;
-use crate::{println, panic};
+use crate::println;
 use crate::symbols::*;
 use crate::spinlock::Mutex;
 use crate::page::EntryAttributes;
 use crate::page::{Table, KERNEL_PGTABLE};
 use crate::uart::UART_BASE_ADDR;
-use crate::process::*;
 use riscv::{register::*, asm};
-use crate::mem;
 use crate::arch;
-
 
 /// Maximum number of pages. As QEMU and linker script `kernel.ld`
 /// are set to have 128MB of RAM, maximum number of pages can be calculated.
@@ -173,8 +170,8 @@ pub unsafe fn init() {
         EntryAttributes::RW as usize,
     );
     pgtable.kernel_map(
-        MMIO_VIRTIO_START,
-        MMIO_VIRTIO_START,
+        VIRTIO_MMIO_BASE,
+        VIRTIO_MMIO_BASE,
         EntryAttributes::RW as usize,
     );
     pgtable.kernel_map(
@@ -208,7 +205,7 @@ pub fn ALLOC() -> &'static Mutex<Allocator> { &__ALLOC }
 use core::alloc::{GlobalAlloc, Layout};
 use crate::plic::PLIC_BASE;
 use crate::clint::CLINT_BASE;
-use crate::virtio::MMIO_VIRTIO_START;
+use crate::virtio::VIRTIO_MMIO_BASE;
 
 struct OsAllocator {}
 

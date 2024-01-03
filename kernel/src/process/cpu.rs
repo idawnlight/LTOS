@@ -3,22 +3,24 @@
 // This software is released under the MIT License.
 // https://opensource.org/licenses/MIT
 
+use alloc::boxed::Box;
 use core::cell::UnsafeCell;
 use crate::arch;
+use crate::process::{Context, Process};
 
 /// Holding CPU information
 #[repr(C)]
 pub struct CPU {
-    // pub scheduler_context: Context,
-    // pub process: Option<Box<Process>>,
+    pub scheduler_context: Context,
+    pub process: Option<Box<Process>>,
     pub intr_lock: IntrLock,
 }
 
 impl CPU {
     pub const fn zero() -> Self {
         Self {
-            // process: None,
-            // scheduler_context: Context::zero(),
+            process: None,
+            scheduler_context: Context::zero(),
             intr_lock: IntrLock::new(),
         }
     }

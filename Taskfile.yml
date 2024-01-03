@@ -4,9 +4,12 @@ vars:
   type: debug
   release_flag: ""
   k: kernel/src
+  u: user/src
   target: riscv64gc-unknown-none-elf
   riscvcc: riscv64-elf-gcc
-  cflags: "-Wall -Wextra -pedantic -static -ffreestanding -nostdlib -fno-exceptions -march=rv64gc -mabi=lp64d -Wall -Werror -O -fno-omit-frame-pointer -ggdb -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie"
+  objcopy: riscv64-elf-objcopy
+  strip: riscv64-elf-strip
+  cflags: "-Wall -Wextra -static -ffreestanding -nostdlib -fno-exceptions -march=rv64gc -mabi=lp64d -Wall -Werror -O -fno-omit-frame-pointer -ggdb -MD -mcmodel=medany -ffreestanding -fno-common -nostdlib -mno-relax -I. -fno-stack-protector -fno-pie -no-pie"
   target_path: ./target/{{.target}}/{{.type}}
   assembly_files:
     sh: ls {{.k}}/asm/*.S | tr '\n' ' '
@@ -15,23 +18,36 @@ vars:
   kernel_linker_script: "{{.k}}/kernel.lds"
   kernel_lib_out: "{{.kernel_libs}}/libkernel.a"
   kernel_out: kernel.elf
+  user_libs: "{{.target_path}}"
+  user_lib_out: "{{.user_libs}}/libuser.rlib"
+  user_linker_script: "{{.u}}/user.ld"
   qemu_binary: qemu-system-riscv64
   mach: virt
   cpu: rv64
-  cpus: 4
+  cpus: 1
   mem: 128M
   read_elf: /opt/homebrew/opt/binutils/bin/readelf
 
 tasks:
   build:
     cmds:
-      - cargo build {{.release_flag}}
+      - cargo build {{.release_flag}} -p kernel
+      - RUSTFLAGS="-C link-arg=-T{{.user_linker_script}}" cargo build {{.release_flag}} -p user
+      - "{{.strip}} -g {{.target_path}}/init"
+
+  mkfs:
+    cmds:
+      - g++ fs/fs.cpp -o fs/mkfs --std=c++11
+      - ./fs/mkfs hdd.img {{.user_libs}}/init ./fs/test.txt
 
   build_image:
     deps:
       - build
+      - mkfs
     cmds:
       - "{{.riscvcc}} {{.cflags}} -T{{.kernel_linker_script}} -o {{.kernel_out}} {{.assembly_files}} {{.cxx_files}} -L{{.kernel_libs}} {{.kernel_lib}}"
+      - "{{.riscvcc}} {{.cflags}} -T{{.user_linker_script}} -o initcode.elf {{.u}}/initcode.S {{.u}}/syscall.h"
+      - "{{.objcopy}} -S -O binary initcode.elf initcode"
 
   qemu:
     deps:
@@ -39,7 +55,7 @@ tasks:
     cmds:
       - "{{.qemu_binary}} -machine {{.mach}} -cpu {{.cpu}} -smp {{.cpus}} -m {{.mem}} -nographic -serial mon:stdio -bios none -kernel {{.kernel_out}} -drive if=none,format=raw,file=hdd.img,id=foo -device virtio-blk-device,drive=foo,bus=virtio-mmio-bus.0"
 
-  qemu-debug:
+  qemu_debug:
     deps:
       - build_image
     cmds:

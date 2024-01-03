@@ -29,7 +29,9 @@ pub mod symbols;
 pub mod print;
 pub mod mem;
 pub mod virtio;
-pub mod block;
+pub mod file;
+pub mod elf;
+pub mod test;
 
 // ///////////////////////////////////
 // / LANGUAGE STRUCTURES / FUNCTIONS

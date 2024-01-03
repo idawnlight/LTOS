@@ -34,8 +34,7 @@ use core::marker::Sync;
 use core::ops::{Drop, Deref, DerefMut};
 use core::default::Default;
 use crate::arch;
-use crate::process::my_cpu;
-use crate::process::cpu::IntrLockGuard;
+use crate::process::{IntrLockGuard, my_cpu};
 
 /// A RISC-V Mutex.
 pub struct Mutex<T: ?Sized> {

@@ -8,6 +8,7 @@
 use riscv::register::*;
 use crate::{cpu, plic, println};
 use crate::uart::uartintr;
+use crate::virtio::virtiointr;
 // use crate::uart::uartintr;
 // use crate::arch;
 // use crate::virtio::virtiointr;
@@ -30,9 +31,9 @@ pub fn devintr() -> Option<Intr> {
                 plic::UART0_IRQ => {
                     uartintr();
                 },
-                // plic::VIRTIO0_IRQ => {
-                //     virtiointr();
-                // },
+                plic::VIRTIO0_IRQ => {
+                    virtiointr();
+                },
                 _ => {
                     println!("Unrecognized external interrupt: {}", interrupt);
                 }

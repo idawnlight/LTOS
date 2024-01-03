@@ -1,369 +1,518 @@
-// virtio.rs
-// VirtIO routines for the VirtIO protocol
-// Stephen Marz
-// 10 March 2020
+// Copyright (c) 2020 Alex Chi
+//
+// This software is released under the MIT License.
+// https://opensource.org/licenses/MIT
 
-use crate::{print, println, block, block::setup_block_device, symbols::PAGE_SIZE};
-use core::mem::size_of;
+//! virt-io driver
 
-// Flags
-// Descriptor flags have VIRTIO_DESC_F as a prefix
-// Available flags have VIRTIO_AVAIL_F
+use crate::spinlock::{Mutex, MutexGuard};
+use crate::symbols::{PAGE_SIZE, PAGE_ORDER};
+use crate::process::{wakeup, sleep};
+use alloc::boxed::Box;
+use crate::arch::__sync_synchronize;
+use crate::info;
 
-pub const VIRTIO_F_RING_INDIRECT_DESC: u32 = 28;
-pub const VIRTIO_F_RING_EVENT_IDX: u32 = 29;
-pub const VIRTIO_F_VERSION_1: u32 = 32;
+/// VIRTIO base address on QEMU RISC-V
+pub const VIRTIO_MMIO_BASE: usize = 0x10001000;
 
-pub const VIRTIO_DESC_F_NEXT: u16 = 1;
-pub const VIRTIO_DESC_F_WRITE: u16 = 2;
-pub const VIRTIO_DESC_F_INDIRECT: u16 = 4;
-
-pub const VIRTIO_AVAIL_F_NO_INTERRUPT: u16 = 1;
-
-pub const VIRTIO_USED_F_NO_NOTIFY: u16 = 1;
-
-// According to the documentation, this must be a power
-// of 2 for the new style. So, I'm changing this to use
-// 1 << instead because that will enforce this standard.
-pub const VIRTIO_RING_SIZE: usize = 1 << 7;
-
-// VirtIO structures
-
-// The descriptor holds the data that we need to send to
-// the device. The address is a physical address and NOT
-// a virtual address. The len is in bytes and the flags are
-// specified above. Any descriptor can be chained, hence the
-// next field, but only if the F_NEXT flag is specified.
-#[repr(C)]
-pub struct Descriptor {
-    pub addr:  u64,
-    pub len:   u32,
-    pub flags: u16,
-    pub next:  u16,
+/// VIRTIO MMIO address offset
+#[allow(non_camel_case_types)]
+pub enum VIRTIO_MMIO {
+    MAGIC_VALUE = 0x0,
+    VERSION = 0x4,
+    DEVICE_ID = 0x8,
+    VENDOR_ID = 0xc,
+    DEVICE_FEATURES = 0x10,
+    DRIVER_FEATURES = 0x20,
+    GUEST_PAGE_SIZE = 0x28,
+    QUEUE_SEL = 0x30,
+    QUEUE_NUM_MAX = 0x34,
+    QUEUE_NUM = 0x38,
+    QUEUE_ALIGN = 0x3c,
+    QUEUE_PFN = 0x40,
+    QUEUE_READY = 0x44,
+    QUEUE_NOTIFY = 0x50,
+    INTERRUPT_STATUS = 0x60,
+    INTERRUPT_ACK = 0x64,
+    STATUS = 0x70,
 }
 
-#[repr(C)]
-pub struct Available {
-    pub flags: u16,
-    pub idx:   u16,
-    pub ring:  [u16; VIRTIO_RING_SIZE],
-    pub event: u16,
+impl VIRTIO_MMIO {
+    /// Get address of MMIO from enum
+    pub const fn val(self) -> usize {
+        self as usize + VIRTIO_MMIO_BASE
+    }
+    /// Get pointer to MMIO register from enum
+    pub const fn ptr(self) -> *mut u32 {
+        self.val() as _
+    }
 }
 
+#[allow(non_camel_case_types)]
+pub enum VIRTIO_CONFIG_S {
+    ACKNOWLDGE = 1,
+    DRIVER = 1 << 1,
+    DRIVER_OK = 1 << 2,
+    FEATURES_OK = 1 << 3,
+}
+
+impl VIRTIO_CONFIG_S {
+    pub const fn val(self) -> u32 { self as _ }
+}
+
+#[allow(non_camel_case_types)]
+pub enum VIRTIO_FEATURE {
+    BLK_F_RO = 5,
+    BLK_F_SCSI = 7,
+    BLK_F_CONFIG_WCE = 11,
+    BLK_F_MQ = 12,
+    F_ANY_LAYOUT = 27,
+    RING_F_INDIRECT_DESC = 28,
+    RING_F_EVENT_IDX = 29,
+}
+
+impl VIRTIO_FEATURE {
+    pub fn bit(self) -> u32 {
+        (1 << self as usize) as u32
+    }
+}
+
+pub const DESC_NUM: usize = 8;
+
 #[repr(C)]
-pub struct UsedElem {
-    pub id:  u32,
+pub struct VRingDesc {
+    pub addr: usize,
+    pub len: u32,
+    pub flags: u16,
+    pub next: u16,
+}
+
+impl VRingDesc {
+    pub const fn new() -> Self {
+        Self {
+            addr: 0,
+            len: 0,
+            flags: 0,
+            next: 0,
+        }
+    }
+}
+
+pub const VRING_DESC_F_NEXT: u16 = 1;
+pub const VRING_DESC_F_WRITE: u16 = 2;
+
+#[repr(C)]
+pub struct VRingUsedElem {
+    pub id: u32,
     pub len: u32,
 }
 
-#[repr(C)]
-pub struct Used {
-    pub flags: u16,
-    pub idx:   u16,
-    pub ring:  [UsedElem; VIRTIO_RING_SIZE],
-    pub event: u16,
-}
-
-#[repr(C)]
-pub struct Queue {
-    pub desc:  [Descriptor; VIRTIO_RING_SIZE],
-    pub avail: Available,
-    // Calculating padding, we need the used ring to start on a page boundary. We take the page size, subtract the
-    // amount the descriptor ring takes then subtract the available structure and ring.
-    pub padding0: [u8; PAGE_SIZE - size_of::<Descriptor>() * VIRTIO_RING_SIZE - size_of::<Available>()],
-    pub used:     Used,
-}
-
-// The MMIO transport is "legacy" in QEMU, so these registers represent
-// the legacy interface.
-#[repr(usize)]
-pub enum MmioOffsets {
-    MagicValue = 0x000,
-    Version = 0x004,
-    DeviceId = 0x008,
-    VendorId = 0x00c,
-    HostFeatures = 0x010,
-    HostFeaturesSel = 0x014,
-    GuestFeatures = 0x020,
-    GuestFeaturesSel = 0x024,
-    GuestPageSize = 0x028,
-    QueueSel = 0x030,
-    QueueNumMax = 0x034,
-    QueueNum = 0x038,
-    QueueAlign = 0x03c,
-    QueuePfn = 0x040,
-    QueueNotify = 0x050,
-    InterruptStatus = 0x060,
-    InterruptAck = 0x064,
-    Status = 0x070,
-    Config = 0x100,
-}
-
-// This currently isn't used, but if anyone wants to try their hand at putting a structure
-// to the MMIO address space, you can use the following. Remember that this is volatile!
-#[repr(C)]
-pub struct MmioDevice {
-    magic_value: u32,
-    version: u32,
-    device_id: u32,
-    vendor_id: u32,
-    host_features: u32,
-    host_features_sel: u32,
-    rsv1: [u8; 8],
-    guest_features: u32,
-    guest_features_sel: u32,
-    guest_page_size: u32,
-    rsv2: [u8; 4],
-    queue_sel: u32,
-    queue_num_max: u32,
-    queue_num: u32,
-    queue_align: u32,
-    queue_pfn: u64,
-    rsv3: [u8; 8],
-    queue_notify: u32,
-    rsv4: [u8; 12],
-    interrupt_status: u32,
-    interrupt_ack: u32,
-    rsv5: [u8; 8],
-    status: u32,
-    //rsv6: [u8; 140],
-    //uint32_t config[1];
-    // The config space starts at 0x100, but it is device dependent.
-}
-
-#[repr(usize)]
-pub enum DeviceTypes {
-    None = 0,
-    Network = 1,
-    Block = 2,
-    Console = 3,
-    Entropy = 4,
-    Gpu = 16,
-    Input = 18,
-    Memory = 24,
-}
-
-// Enumerations in Rust aren't easy to convert back
-// and forth. Furthermore, we're going to use a u32
-// pointer, so we need to "undo" the scaling that
-// Rust will do with the .add() function.
-impl MmioOffsets {
-    pub fn val(self) -> usize {
-        self as usize
-    }
-
-    pub fn scaled(self, scale: usize) -> usize {
-        self.val() / scale
-    }
-
-    pub fn scale32(self) -> usize {
-        self.scaled(4)
-    }
-
-}
-
-pub enum StatusField {
-    Acknowledge = 1,
-    Driver = 2,
-    Failed = 128,
-    FeaturesOk = 8,
-    DriverOk = 4,
-    DeviceNeedsReset = 64,
-}
-
-// The status field will be compared to the status register. So,
-// I've made some helper functions to checking that register easier.
-impl StatusField {
-    pub fn val(self) -> usize {
-        self as usize
-    }
-
-    pub fn val32(self) -> u32 {
-        self as u32
-    }
-
-    pub fn test(sf: u32, bit: StatusField) -> bool {
-        sf & bit.val32() != 0
-    }
-
-    pub fn is_failed(sf: u32) -> bool {
-        StatusField::test(sf, StatusField::Failed)
-    }
-
-    pub fn needs_reset(sf: u32) -> bool {
-        StatusField::test(sf, StatusField::DeviceNeedsReset)
-    }
-
-    pub fn driver_ok(sf: u32) -> bool {
-        StatusField::test(sf, StatusField::DriverOk)
-    }
-
-    pub fn features_ok(sf: u32) -> bool {
-        StatusField::test(sf, StatusField::FeaturesOk)
-    }
-}
-
-// We probably shouldn't put these here, but it'll help
-// with probing the bus, etc. These are architecture specific
-// which is why I say that.
-pub const MMIO_VIRTIO_START: usize = 0x1000_1000;
-pub const MMIO_VIRTIO_END: usize = 0x1000_8000;
-pub const MMIO_VIRTIO_STRIDE: usize = 0x1000;
-pub const MMIO_VIRTIO_MAGIC: u32 = 0x74_72_69_76;
-
-// The VirtioDevice is essentially a structure we can put into an array
-// to determine what virtio devices are attached to the system. Right now,
-// we're using the 1..=8  linearity of the VirtIO devices on QEMU to help
-// with reducing the data structure itself. Otherwise, we might be forced
-// to use an MMIO pointer.
-pub struct VirtioDevice {
-    pub devtype: DeviceTypes,
-}
-
-impl VirtioDevice {
+impl VRingUsedElem {
     pub const fn new() -> Self {
-        VirtioDevice { devtype: DeviceTypes::None, }
-    }
-
-    pub const fn new_with(devtype: DeviceTypes) -> Self {
-        VirtioDevice { devtype }
+        Self {
+            id: 0,
+            len: 0,
+        }
     }
 }
 
-static mut VIRTIO_DEVICES: [Option<VirtioDevice>; 8] = [None, None, None, None, None, None, None, None];
+pub const VIRTIO_BLK_T_IN: u32 = 0;
+pub const VIRTIO_BLK_T_OUT: u32 = 1;
 
-/// Probe the VirtIO bus for devices that might be
-/// out there.
-pub fn probe() {
-    // Rust's for loop uses an Iterator object, which now has a step_by
-    // modifier to change how much it steps. Also recall that ..= means up
-    // to AND including MMIO_VIRTIO_END.
-    for addr in (MMIO_VIRTIO_START..=MMIO_VIRTIO_END).step_by(MMIO_VIRTIO_STRIDE) {
-        print!("Virtio probing 0x{:08x}...", addr);
-        let magicvalue;
-        let deviceid;
-        let ptr = addr as *mut u32;
-        unsafe {
-            magicvalue = ptr.read_volatile();
-            deviceid = ptr.add(2).read_volatile();
+#[repr(C)]
+pub struct UsedArea {
+    pub flags: u16,
+    pub id: u16,
+    pub elems: [VRingUsedElem; DESC_NUM],
+}
+
+impl UsedArea {
+    pub const fn new() -> Self {
+        Self {
+            flags: 0,
+            id: 0,
+            elems: [const { VRingUsedElem::new() }; DESC_NUM],
         }
-        // 0x74_72_69_76 is "virt" in little endian, so in reality
-        // it is triv. All VirtIO devices have this attached to the
-        // MagicValue register (offset 0x000)
-        if MMIO_VIRTIO_MAGIC != magicvalue {
-            println!("not virtio.");
+    }
+}
+
+pub struct InflightOp {
+    pub buf: Box<Buf>,
+    pub status: u8,
+}
+
+/// Size of avail array
+const AVAIL_SZ: usize = (PAGE_SIZE - DESC_NUM * core::mem::size_of::<VRingDesc>()) / core::mem::size_of::<u16>();
+
+#[repr(C)]
+#[repr(align(4096))]
+pub struct VirtIOData {
+    /// VIRTIO MMIO descriptor register
+    pub desc: [VRingDesc; DESC_NUM],
+    /// VIRTIO MMIO descriptor avail register (padding to page size)
+    pub avail: [u16; AVAIL_SZ],
+    /// VIRTIO MMIO descriptor used register
+    pub used: [UsedArea; DESC_NUM],
+
+    /// is descriptor free
+    pub free: [bool; DESC_NUM],
+    /// used index of used array
+    pub used_idx: u16,
+    /// in-flight operations
+    pub info: [Option<InflightOp>; DESC_NUM],
+}
+
+pub struct VirtIO(Mutex<VirtIOData>);
+
+/// VIRTIO buffer size
+pub const BSIZE: usize = 1024;
+
+/// VIRTIO Buffer
+#[repr(C)]
+pub struct Buf {
+    pub valid: bool,
+    /// TODO: this can be removed
+    pub disk: i32,
+    /// device ID
+    pub dev: u32,
+    /// block number
+    pub blockno: u32,
+    /// buffer data
+    pub data: [u8; BSIZE],
+}
+
+impl Buf {
+    pub const fn new() -> Self {
+        Self {
+            valid: false,
+            disk: 0,
+            dev: 0,
+            blockno: 0,
+            data: [0; BSIZE],
         }
-        // If we are a virtio device, we now need to see if anything
-        // is actually attached to it. The DeviceID register will
-        // contain what type of device this is. If this value is 0,
-        // then it is not connected.
-        else if 0 == deviceid {
-            println!("not connected.");
+    }
+}
+
+#[repr(C)]
+pub struct BlkOutHdr {
+    pub blk_type: u32,
+    reserved: u32,
+    sector: usize,
+}
+
+impl VirtIOData {
+    /// Free one descriptor
+    fn free_desc(&mut self, i: usize) {
+        if i >= DESC_NUM {
+            panic!("invalid desc");
         }
-        // If we get here, we have a connected virtio device. Now we have
-        // to figure out what kind it is so we can do device-specific setup.
-        else {
-            match deviceid {
-                // DeviceID 1 is a network device
-                1 => {
-                    print!("network device...");
-                    if false == setup_network_device(ptr) {
-                        println!("setup failed.");
+        if self.free[i] {
+            panic!("already free");
+        }
+        self.desc[i].addr = 0;
+        self.free[i] = true;
+        wakeup(&self.free[0]);
+    }
+
+    /// Allocate one descriptor
+    fn alloc_desc(&mut self) -> Option<usize> {
+        for i in 0..DESC_NUM {
+            if self.free[i] {
+                self.free[i] = false;
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    /// Allocate three descriptors, return array of indices
+    fn alloc3_desc(&mut self) -> Option<[usize; 3]> {
+        let mut idx = [0; 3];
+        for i in 0..3 {
+            match self.alloc_desc() {
+                Some(x) => idx[i] = x,
+                None => {
+                    for j in 0..i {
+                        self.free_desc(idx[j]);
                     }
-                    else {
-                        println!("setup succeeded!");
-                    }
-                },
-                // DeviceID 2 is a block device
-                2 => {
-                    print!("block device...");
-                    if false == setup_block_device(ptr) {
-                        println!("setup failed.");
-                    }
-                    else {
-                        let idx = (addr - MMIO_VIRTIO_START) >> 12;
-                        unsafe {
-                            VIRTIO_DEVICES[idx] =
-                                Some(VirtioDevice::new_with(DeviceTypes::Block));
-                        }
-                        println!("setup succeeded!");
-                    }
-                },
-                // DeviceID 4 is a random number generator device
-                4 => {
-                    print!("entropy device...");
-                    // if false == setup_entropy_device(ptr) {
-                    //     println!("setup failed.");
-                    // }
-                    // else {
-                    //     println!("setup succeeded!");
-                    // }
-                },
-                // DeviceID 16 is a GPU device
-                16 => {
-                    print!("GPU device, skip for now");
-                    // if false == setup_gpu_device(ptr) {
-                    //     println!("setup failed.");
-                    // }
-                    // else {
-                    //     let idx = (addr - MMIO_VIRTIO_START) >> 12;
-                    //     unsafe {
-                    //         VIRTIO_DEVICES[idx] =
-                    //             Some(VirtioDevice::new_with(DeviceTypes::Gpu));
-                    //     }
-                    //     println!("setup succeeded!");
-                    // }
-                },
-                // DeviceID 18 is an input device
-                18 => {
-                    print!("input device, skip for now");
-                    // if false == setup_input_device(ptr) {
-                    //     println!("setup failed.");
-                    // }
-                    // else {
-                    //     let idx = (addr - MMIO_VIRTIO_START) >> 12;
-                    //     unsafe {
-                    //         VIRTIO_DEVICES[idx] =
-                    //             Some(VirtioDevice::new_with(DeviceTypes::Input));
-                    //     }
-                    //     println!("setup succeeded!");
-                    // }
-                },
-                _ => println!("unknown device type."),
+                    return None;
+                }
+            }
+        }
+        Some(idx)
+    }
+
+    /// Free descriptor chain
+    fn free_chain(&mut self, mut i: usize) {
+        loop {
+            self.free_desc(i);
+            if self.desc[i].flags & VRING_DESC_F_NEXT != 0 {
+                i = self.desc[i].next as usize;
+            } else {
+                break;
             }
         }
     }
 }
 
-pub fn setup_network_device(_ptr: *mut u32) -> bool {
-    false
-}
+impl VirtIO {
+    pub const fn new() -> Self {
+        Self(
+            Mutex::new(VirtIOData {
+                desc: [const { VRingDesc::new() }; DESC_NUM],
+                avail: [0; AVAIL_SZ],
+                used: [const { UsedArea::new() }; DESC_NUM],
+                free: [true; DESC_NUM],
+                used_idx: 0,
+                info: [const { None }; DESC_NUM],
+            }, "vdisk"))
+    }
 
-// The External pin (PLIC) trap will lead us here if it is
-// determined that interrupts 1..=8 are what caused the interrupt.
-// In here, we try to figure out where to direct the interrupt
-// and then handle it.
-pub fn handle_interrupt(interrupt: u32) {
-    let idx = interrupt as usize - 1;
-    unsafe {
-        if let Some(vd) = &VIRTIO_DEVICES[idx] {
-            match vd.devtype {
-                DeviceTypes::Block => {
-                    block::handle_interrupt(idx);
-                },
-                // DeviceTypes::Gpu => {
-                //     gpu::handle_interrupt(idx);
-                // },
-                // DeviceTypes::Input => {
-                //     input::handle_interrupt(idx);
-                // },
-                _ => {
-                    println!("Invalid device generated interrupt!");
-                },
+    /// Initialize VIRTIO driver.
+    ///
+    /// Should be called in booting hart.
+    pub unsafe fn init(&mut self) {
+        use VIRTIO_MMIO::*;
+        use VIRTIO_CONFIG_S::*;
+        use VIRTIO_FEATURE::*;
+
+        let mut vio = self.0.get();
+
+        if MAGIC_VALUE.ptr().read_volatile() != 0x74726976 {
+            panic!("cannot find virtio disk: magic value");
+        }
+        if VERSION.ptr().read_volatile() != 1 {
+            panic!("cannot find virtio disk: version");
+        }
+        if DEVICE_ID.ptr().read_volatile() != 2 {
+            panic!("cannot find virtio disk: device id");
+        }
+        if VENDOR_ID.ptr().read_volatile() != 0x554d4551 {
+            panic!("cannot find virtio disk: vendor id");
+        }
+
+        let mut status: u32 = 0;
+        status |= ACKNOWLDGE.val();
+        STATUS.ptr().write_volatile(status);
+
+        status |= DRIVER.val();
+        STATUS.ptr().write_volatile(status);
+
+        let mut features: u32 = DEVICE_FEATURES.ptr().read_volatile();
+        features &= !BLK_F_RO.bit();
+        features &= !BLK_F_SCSI.bit();
+        features &= !BLK_F_CONFIG_WCE.bit();
+        features &= !BLK_F_MQ.bit();
+        features &= !F_ANY_LAYOUT.bit();
+        features &= !RING_F_EVENT_IDX.bit();
+        features &= !RING_F_INDIRECT_DESC.bit();
+        DEVICE_FEATURES.ptr().write_volatile(features);
+
+        status |= FEATURES_OK.val();
+        STATUS.ptr().write_volatile(status);
+
+        status |= DRIVER_OK.val();
+        STATUS.ptr().write_volatile(status);
+
+        GUEST_PAGE_SIZE.ptr().write_volatile(PAGE_SIZE as u32);
+
+        QUEUE_SEL.ptr().write_volatile(0);
+        let max = QUEUE_NUM_MAX.ptr().read_volatile();
+        if max == 0 {
+            panic!("virtio disk has no queue");
+        }
+        if max < DESC_NUM as u32 {
+            panic!("virtio disk max queue too short {} < {}", max, DESC_NUM);
+        }
+        QUEUE_NUM.ptr().write_volatile(DESC_NUM as u32);
+
+        QUEUE_PFN.ptr().write_volatile(((vio as *mut _ as usize) >> PAGE_ORDER) as u32);
+
+        for i in 0..DESC_NUM {
+            vio.free[i] = true;
+        }
+    }
+
+    /// Read-write operation
+    fn rw(&mut self, mut b: Box<Buf>, write: bool) -> Box<Buf> {
+        use VIRTIO_MMIO::*;
+
+        let sector = b.blockno as usize * (BSIZE / 512);
+
+        let mut vio = self.0.lock();
+
+        let idx: [usize; 3] = loop {
+            if let Some(idx) = vio.alloc3_desc() {
+                break idx;
+            }
+            vio = sleep(&vio.free[0] as *const _, vio);
+        };
+
+        // info!("3 desc: {:?}", idx);
+
+        let buf0 = BlkOutHdr {
+            reserved: 0,
+            sector,
+            blk_type: if write { VIRTIO_BLK_T_OUT } else { VIRTIO_BLK_T_IN },
+        };
+
+
+        // VIRTIO 5.2.6.4
+        // MUST use a single 8-byte descriptor containing type, reserved and sector,
+        // followed by descriptors for data, then finally a separate 1-byte descriptor for status.
+
+        {
+            let desc0 = &mut vio.desc[idx[0]];
+            desc0.addr = &buf0 as *const _ as usize;
+            desc0.len = core::mem::size_of::<BlkOutHdr>() as u32;
+            desc0.flags = VRING_DESC_F_NEXT;
+            desc0.next = idx[1] as u16;
+        }
+
+        {
+            let desc1 = &mut vio.desc[idx[1]];
+            desc1.addr = b.data.as_mut_ptr() as usize;
+            desc1.len = BSIZE as u32;
+            desc1.flags = if write { 0 } else { VRING_DESC_F_WRITE };
+            desc1.flags |= VRING_DESC_F_NEXT;
+            desc1.next = idx[2] as u16;
+        }
+
+        b.disk = 1;
+        vio.info[idx[0]] = Some(InflightOp {
+            buf: b,
+            status: 0,
+        });
+
+        {
+            let addr = &vio.info[idx[0]].as_ref().unwrap().status as *const _ as usize;
+            {
+                let desc2 = &mut vio.desc[idx[2]];
+
+                desc2.addr = addr;
+                desc2.len = 1;
+                desc2.flags = VRING_DESC_F_WRITE;
+                desc2.next = 0;
+            }
+
+            let idx_id = 2 + vio.avail[1] as usize % DESC_NUM;
+            vio.avail[idx_id] = idx[0] as u16;
+
+            __sync_synchronize();
+
+            vio.avail[1] = vio.avail[1] + 1;
+
+            unsafe { QUEUE_NOTIFY.ptr().write_volatile(0); }
+            // info!("{:x}", &vio.info[idx[0]].as_ref().unwrap().status as *const _ as usize);
+            let buf_addr = &*vio.info[idx[0]].as_ref().unwrap().buf as *const _;
+            // info!("sleep {:x} id={}", buf_addr as usize, vio.info[idx[0]].as_ref().unwrap().status);
+            while vio.info[idx[0]].as_ref().unwrap().buf.disk == 1 {
+                vio = sleep(buf_addr, vio);
             }
         }
-        else {
-            println!("Spurious interrupt {}", interrupt);
+        let result = core::mem::replace(&mut vio.info[idx[0]], None);
+        unsafe { vio.info[idx[0]] = core::mem::zeroed(); }
+        vio.info[idx[0]] = None;
+        vio.free_chain(idx[0]);
+        result.unwrap().buf
+    }
+
+    /// Read from device and block number
+    pub fn read(&mut self, dev: u32, blockno: u32) -> Box<Buf> {
+        let mut buf = Box::new(Buf::new());
+        buf.dev = dev;
+        buf.blockno = blockno;
+        self.rw(buf, false)
+    }
+
+    /// Write buffer to disk
+    pub fn write(&mut self, buf: Box<Buf>) {
+        self.rw(buf, true);
+    }
+}
+
+/// VirtIO driver object
+static mut __VIRTIO: VirtIO = VirtIO::new();
+
+/// Global function to get an instance of VirtIO driver
+#[allow(non_snake_case)]
+pub fn VIRTIO() -> &'static mut VirtIO { unsafe { &mut __VIRTIO } }
+
+pub unsafe fn init() {
+    VIRTIO().init();
+}
+
+
+/// VIRTIO interrupt
+pub fn virtiointr() {
+    use crate::info;
+    let mut disk = VIRTIO().0.lock();
+    while disk.used_idx as usize % DESC_NUM != disk.used[0].id as usize % DESC_NUM {
+
+        let id = disk.used[0].elems[disk.used_idx as usize].id as usize;
+
+        if disk.info[id].is_none() {
+            panic!("invalid id");
         }
+
+        let info = disk.info[id].as_mut().unwrap();
+
+        // info!("processing 0x{:x}", &*info.buf as *const _ as usize);
+
+        if info.status != 0 {
+            panic!("virtio_disk_intr status status={} id={}", info.status, id);
+        }
+
+        info.buf.disk = 0;
+
+        wakeup(&*info.buf);
+
+        disk.used_idx = ((disk.used_idx + 1) as usize % DESC_NUM) as u16;
+    }
+}
+
+pub mod tests {
+    use super::*;
+
+    pub fn tests() -> &'static [(&'static str, fn())] {
+        &[
+            ("memory layout", test_memory_layout),
+            ("read and write", test_rw)
+        ]
+    }
+
+    /// Test virtio memory layout
+    pub fn test_memory_layout() {
+        let virtio = VIRTIO().0.lock();
+        assert_eq!(&virtio.desc as *const _ as usize % PAGE_SIZE, 0);
+        assert_eq!(&virtio.used as *const _ as usize % PAGE_SIZE, 0);
+        assert_eq!(&virtio.used as *const _ as usize - &virtio.desc as *const _ as usize, PAGE_SIZE);
+    }
+
+    use crate::{print, println};
+
+    /// Test read and write
+    pub fn test_rw() {
+        let virtio = VIRTIO();
+        {
+            // I don't know why this is needed
+            // but I have to set all descriptors to free again here
+            let mut vio = virtio.0.lock();
+            for i in 0..DESC_NUM {
+                vio.free[i] = true;
+            }
+        }
+        let b = virtio.read(1, 0);
+        unsafe { info!("size: {}", core::ptr::read(b.data.as_ptr() as *const usize)); }
+        unsafe { info!("offset: {}", core::ptr::read(b.data.as_ptr().add(8) as *const usize)); }
+        info!("filename: ");
+        for i in 16..b.data.len() {
+            let d = b.data[i];
+            if d == 0 {
+                break;
+            }
+            print!("{}", b.data[i] as char);
+        }
+        println!();
     }
 }
