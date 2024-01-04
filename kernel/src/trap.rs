@@ -138,8 +138,8 @@ pub extern "C" fn usertrap() -> ! {
 /// Jump to user space through trampoline after trapframe is properly set. Calls `userret` in `trampoline.S`.
 #[inline]
 fn trampoline_userret(tf: usize, satp_val: usize) -> ! {
-    let uservec_offset = userret as usize - TRAMPOLINE_TEXT_START();
-    let fn_addr = (TRAMPOLINE_START + uservec_offset) as *const ();
+    let userret_offset = userret as usize - TRAMPOLINE_TEXT_START();
+    let fn_addr = (TRAMPOLINE_START + userret_offset) as *const ();
     let fn_addr: extern "C" fn(usize, usize) -> ! = unsafe { core::mem::transmute(fn_addr) };
     (fn_addr)(tf, satp_val)
 }

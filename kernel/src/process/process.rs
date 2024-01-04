@@ -102,10 +102,6 @@ pub extern "C" fn forkret() -> ! {
 /// This file will be compiled to elf, and then
 /// be stripped with objdump, as specified in Makefile.
 fn init_code() -> &'static [u8] {
-    // #[cfg(debug_assertions)]
-    //     let x = include_bytes!("../../../target/riscv64gc-unknown-none-elf/debug/initcode");
-    // #[cfg(not(debug_assertions))]
-    //     let x = include_bytes!("../../../target/riscv64gc-unknown-none-elf/release/initcode");
     let x = include_bytes!("../../../initcode");
     x
 }

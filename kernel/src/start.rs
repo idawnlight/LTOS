@@ -78,6 +78,5 @@ extern "C" fn kmain() {
         plic::hartinit();
     }
 
-    // cpu::wait_forever();
     process::scheduler()
 }
